@@ -80,6 +80,7 @@ class FakeRow;
 class Key;
 struct ChosenRow;
 class InnerWidget;
+class BookmarksBar;
 struct SearchRequestType;
 enum class SearchRequestDelay : uchar;
 class Suggestions;
@@ -334,6 +335,8 @@ private:
 
 	QPointer<Ui::SlideWrap<Ui::RpWidget>> _topBarSuggestion;
 	rpl::event_stream<int> _topBarSuggestionHeightChanged;
+	base::unique_qptr<BookmarksBar> _bookmarksBar;
+	rpl::event_stream<int> _bookmarksBarHeightChanged;
 	rpl::event_stream<bool> _searchStateForTopBarSuggestion;
 	rpl::event_stream<bool> _openedFolderOrForumChanges;
 

@@ -21,6 +21,43 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/section_widget.h"
 
 namespace Core {
+
+namespace {
+
+[[nodiscard]] QString NormalizeBookmarkLink(QString link) {
+	link = link.trimmed();
+	if (link.isEmpty()) {
+		return QString();
+	} else if (link.startsWith('@')) {
+		return u"https://t.me/"_q + link.mid(1);
+	} else if (!link.contains(u"://"_q)) {
+		return u"https://"_q + link;
+	}
+	return link;
+}
+
+[[nodiscard]] std::vector<QString> NormalizeBookmarks(
+		std::vector<QString> links) {
+	auto result = std::vector<QString>();
+	result.reserve(links.size());
+	for (auto &link : links) {
+		auto normalized = NormalizeBookmarkLink(std::move(link));
+		if (normalized.isEmpty()) {
+			continue;
+		}
+		const auto duplicate = ranges::any_of(
+			result,
+			[&](const QString &existing) {
+				return !existing.compare(normalized, Qt::CaseInsensitive);
+			});
+		if (!duplicate) {
+			result.push_back(std::move(normalized));
+		}
+	}
+	return result;
+}
+
+} // namespace
 namespace {
 
 constexpr auto kInitialVideoQuality = 480; // Start with SD.
@@ -243,6 +280,10 @@ QByteArray Settings::serialize() const {
 		+ sizeof(qint32) * 8
 		+ sizeof(ushort)
 		+ sizeof(qint32); // _notificationsDisplayChecksum
+	size += sizeof(qint32);
+	for (const auto &link : _bookmarks) {
+		size += Serialize::stringSize(link);
+	}
 
 	auto result = QByteArray();
 	result.reserve(size);
@@ -406,7 +447,11 @@ QByteArray Settings::serialize() const {
 			<< qint32(_systemDarkModeEnabled.current() ? 1 : 0)
 			<< qint32(_quickDialogAction)
 			<< _notificationsVolume
-			<< _notificationsDisplayChecksum;
+			<< _notificationsDisplayChecksum
+			<< qint32(_bookmarks.size());
+		for (const auto &link : _bookmarks) {
+			stream << link;
+		}
 	}
 
 	Ensures(result.size() == size);
@@ -538,6 +583,9 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	quint32 chatFiltersHorizontal = _chatFiltersHorizontal.current() ? 1 : 0;
 	quint32 quickDialogAction = quint32(_quickDialogAction);
 	ushort notificationsVolume = _notificationsVolume;
+	qint32 bookmarksCount = 0;
+	std::vector<QString> bookmarks;
+	bool bookmarksRead = false;
 
 	stream >> themesAccentColors;
 	if (!stream.atEnd()) {
@@ -875,6 +923,23 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	if (!stream.atEnd()) {
 		stream >> notificationsDisplayChecksum;
 	}
+	if (!stream.atEnd()) {
+		bookmarksRead = true;
+		stream >> bookmarksCount;
+		if (stream.status() == QDataStream::Ok
+			&& bookmarksCount > 0
+			&& bookmarksCount < 10000) {
+			bookmarks.reserve(bookmarksCount);
+			for (auto i = 0; i != bookmarksCount; ++i) {
+				auto link = QString();
+				stream >> link;
+				if (stream.status() != QDataStream::Ok) {
+					break;
+				}
+				bookmarks.push_back(std::move(link));
+			}
+		}
+	}
 	if (stream.status() != QDataStream::Ok) {
 		LOG(("App Error: "
 			"Bad data for Core::Settings::constructFromSerialized()"));
@@ -1099,6 +1164,41 @@ void Settings::addFromSerialized(const QByteArray &serialized) {
 	_chatFiltersHorizontal = (chatFiltersHorizontal == 1);
 	_quickDialogAction = Dialogs::Ui::QuickDialogAction(quickDialogAction);
 	_notificationsVolume = notificationsVolume;
+	if (bookmarksRead) {
+		_bookmarks = NormalizeBookmarks(std::move(bookmarks));
+	}
+}
+
+void Settings::addBookmark(QString link) {
+	link = NormalizeBookmarkLink(std::move(link));
+	if (link.isEmpty()) {
+		return;
+	}
+	if (ranges::any_of(_bookmarks, [&](const QString &existing) {
+		return !existing.compare(link, Qt::CaseInsensitive);
+	})) {
+		return;
+	}
+	_bookmarks.push_back(std::move(link));
+	_bookmarksUpdated.fire({});
+	_saveDelayed.fire({});
+}
+
+void Settings::removeBookmark(const QString &link) {
+	const auto normalized = NormalizeBookmarkLink(link);
+	if (normalized.isEmpty() || _bookmarks.empty()) {
+		return;
+	}
+	const auto was = _bookmarks.size();
+	_bookmarks.erase(
+		ranges::remove_if(_bookmarks, [&](const QString &existing) {
+			return !existing.compare(normalized, Qt::CaseInsensitive);
+		}),
+		end(_bookmarks));
+	if (_bookmarks.size() != was) {
+		_bookmarksUpdated.fire({});
+		_saveDelayed.fire({});
+	}
 }
 
 QString Settings::getSoundPath(const QString &key) const {

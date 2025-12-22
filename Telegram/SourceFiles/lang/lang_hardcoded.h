@@ -70,5 +70,29 @@ inline QString AutostartEnableError() {
 	return u"Could not register for autostart."_q;
 }
 
+inline QString BookmarksTitle() {
+	return u"Bookmarks"_q;
+}
+
+inline QString BookmarksAdd() {
+	return u"Add"_q;
+}
+
+inline QString BookmarksRemove() {
+	return u"Remove"_q;
+}
+
+inline QString BookmarksAddTitle() {
+	return u"Add bookmark"_q;
+}
+
+inline QString BookmarksAddAction() {
+	return u"Add"_q;
+}
+
+inline QString BookmarksInputPlaceholder() {
+	return u"Paste a chat or channel link"_q;
+}
+
 } // namespace Hard
 } // namespace Lang

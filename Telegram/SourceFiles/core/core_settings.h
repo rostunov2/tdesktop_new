@@ -141,6 +141,15 @@ public:
 	[[nodiscard]] QByteArray serialize() const;
 	void addFromSerialized(const QByteArray &serialized);
 
+	[[nodiscard]] const std::vector<QString> &bookmarks() const {
+		return _bookmarks;
+	}
+	[[nodiscard]] rpl::producer<> bookmarksChanges() const {
+		return _bookmarksUpdated.events();
+	}
+	void addBookmark(QString link);
+	void removeBookmark(const QString &link);
+
 	[[nodiscard]] bool adaptiveForWide() const {
 		return _adaptiveForWide.current();
 	}
@@ -1092,11 +1101,13 @@ private:
 	rpl::variable<int> _ivZoom = 100;
 	Media::VideoQuality _videoQuality;
 	rpl::variable<bool> _chatFiltersHorizontal = false;
+	std::vector<QString> _bookmarks;
 
 	bool _tabbedReplacedWithInfo = false; // per-window
 	rpl::event_stream<bool> _tabbedReplacedWithInfoValue; // per-window
 
 	rpl::event_stream<> _saveDelayed;
+	rpl::event_stream<> _bookmarksUpdated;
 	float64 _rememberedSongVolume = kDefaultVolume;
 	bool _rememberedSoundNotifyFromTray = false;
 	bool _rememberedFlashBounceNotifyFromTray = false;
@@ -1114,4 +1125,3 @@ private:
 };
 
 } // namespace Core
-
