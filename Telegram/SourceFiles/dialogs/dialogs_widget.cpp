@@ -15,6 +15,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "dialogs/ui/dialogs_stories_list.h"
 #include "dialogs/ui/dialogs_suggestions.h"
 #include "dialogs/dialogs_inner_widget.h"
+#include "dialogs/dialogs_bookmarks_bar.h"
 #include "dialogs/dialogs_search_from_controllers.h"
 #include "dialogs/dialogs_top_bar_suggestion.h"
 #include "dialogs/dialogs_quick_action.h"
@@ -382,6 +383,15 @@ Widget::Widget(
 		OverscrollType::Real);
 	const auto innerList = _scroll->setOwnedWidget(
 		object_ptr<Ui::VerticalLayout>(this));
+	if (_layout != Layout::Child) {
+		_bookmarksBar = innerList->insert(
+			0,
+			object_ptr<BookmarksBar>(innerList, controller));
+		_bookmarksBar->heightValue(
+		) | rpl::start_to_stream(
+			_bookmarksBarHeightChanged,
+			_bookmarksBar->lifetime());
+	}
 	_inner = innerList->add(object_ptr<InnerWidget>(
 		innerList,
 		controller,
@@ -391,10 +401,14 @@ Widget::Widget(
 			makeChildListShown)));
 	rpl::combine(
 		_scroll->heightValue(),
-		_topBarSuggestionHeightChanged.events_starting_with(0)
-	) | rpl::on_next([=](int height, int topBarHeight) {
+		_topBarSuggestionHeightChanged.events_starting_with(0),
+		_bookmarksBarHeightChanged.events_starting_with(0)
+	) | rpl::on_next([=](
+			int height,
+			int topBarHeight,
+			int bookmarksHeight) {
 		innerList->setMinimumHeight(height);
-		_inner->setMinimumHeight(height - topBarHeight);
+		_inner->setMinimumHeight(height - topBarHeight - bookmarksHeight);
 		_inner->refresh();
 	}, innerList->lifetime());
 	_scroll->widthValue() | rpl::on_next([=](int width) {
